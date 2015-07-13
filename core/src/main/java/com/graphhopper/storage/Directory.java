@@ -18,6 +18,7 @@
 package com.graphhopper.storage;
 
 import java.nio.ByteOrder;
+import java.util.Collection;
 
 /**
  * Maintains a collection of DataAccess objects stored at the same location. One GraphStorage per
@@ -50,6 +51,7 @@ public interface Directory
      * Renames the specified DataAccess object into one.
      */
     // DataAccess rename( DataAccess da, String newName );
+
     /**
      * Removes the specified object from the directory.
      */
@@ -64,4 +66,9 @@ public interface Directory
      * Removes all contained objects from the directory and releases its resources.
      */
     void clear();
+
+    /**
+     * Returns all created directories.
+     */
+    Collection<DataAccess> getAll();
 }

@@ -5,7 +5,7 @@
 For a start which requires only the JRE have a look [here](../web/quickstart.md). 
 Windows user can find a quick guide [here](./windows-setup.md). 
 
-Now, before you proceed install git and jdk6, 7 or 8. Then do:
+Now, before you proceed install git and jdk7 or 8, then do:
 
 ```bash
 $ git clone git://github.com/graphhopper/graphhopper.git
@@ -29,9 +29,15 @@ $ ./graphhopper.sh web north-america_us_new-york.pbf
 
 ## Start Development
 
-Open the project with NetBeans or enable Maven in your IDE. 
+Open the project with NetBeans, IntelliJ or enable Maven in your IDE. 
 [Maven](http://maven.apache.org/download.cgi) is downloaded to ```graphhopper/maven``` if not 
 installed when executing graphhopper.sh.
+
+### NetBeans, IntelliJ, Eclipse
+
+ * For IntelliJ you need to import the code formatting settings (File|Import Settings). Load them from core/files/intellij-settings.jar. See the [special setup](../android/android-studio-setup.md) for Android if using Android studio.
+ * For Eclipse please refer to [this separate setup documentation](./eclipse-setup.md).
+ * Nothing special needs to be done for NetBeans.
 
 ### Java, Embedded Usage
 
@@ -76,7 +82,7 @@ For simplicity you could just start jetty from maven and schedule it as backgrou
 Then the service will be accessible on port 11111.
 
 For production usage you can install the latest jetty (8 or 9) as a service but we prefer to have it bundled as a 
-simple jar. Tomcat should work too. To create a war file do `mvn clean war:war` and copy it from the target/ 
+simple jar. Tomcat should work too. To create a war file do `mvn clean install war:war` and copy it from the target/ 
 folder to your jetty installation. Then copy web/config.properties also there and change this properties 
 file to point to the required graphhopper folder. Increase the Xmx/Xms values of your jetty server e.g. 
 for world wide coverage with a hierarchical graph I do the following in bin/jetty.sh

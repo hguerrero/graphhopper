@@ -19,6 +19,7 @@ package com.graphhopper.http;
 
 import com.google.inject.servlet.ServletModule;
 import com.graphhopper.util.CmdArgs;
+
 import java.util.HashMap;
 import java.util.Map;
 import javax.inject.Singleton;
@@ -29,7 +30,7 @@ import javax.inject.Singleton;
 public class GHServletModule extends ServletModule
 {
     protected Map<String, String> params = new HashMap<String, String>();
-    private final CmdArgs args;
+    protected final CmdArgs args;
 
     public GHServletModule( CmdArgs args )
     {
@@ -64,5 +65,8 @@ public class GHServletModule extends ServletModule
 
         serve("/route*").with(GraphHopperServlet.class);
         bind(GraphHopperServlet.class).in(Singleton.class);
+
+        serve("/nearest*").with(NearestServlet.class);
+        bind(NearestServlet.class).in(Singleton.class);
     }
 }

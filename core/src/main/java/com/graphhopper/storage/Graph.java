@@ -32,6 +32,12 @@ import com.graphhopper.util.shapes.BBox;
 public interface Graph
 {
     /**
+     * @return a graph which behaves like an unprepared graph and e.g. the normal unidirectional
+     * Dijkstra or any graph traversal algorithm can be executed.
+     */
+    Graph getBaseGraph();
+
+    /**
      * @return the number of created locations - via setNode() or edge()
      */
     int getNodes();
@@ -96,8 +102,13 @@ public interface Graph
 
     /**
      * Copy this Graph into the specified Graph g.
-     * <p>
+     * <p/>
      * @return the specified GraphStorage g
      */
     Graph copyTo( Graph g );
+
+    /**
+     * @return the graph extension like a TurnCostExtension
+     */
+    GraphExtension getExtension();
 }

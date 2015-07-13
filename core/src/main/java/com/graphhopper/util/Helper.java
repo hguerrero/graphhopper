@@ -20,6 +20,7 @@ package com.graphhopper.util;
 import com.graphhopper.util.shapes.BBox;
 import gnu.trove.list.TIntList;
 import gnu.trove.list.array.TIntArrayList;
+
 import java.io.*;
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
@@ -31,18 +32,21 @@ import java.security.PrivilegedExceptionAction;
 import java.text.NumberFormat;
 import java.util.*;
 import java.util.Map.Entry;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
  * Several utility classes which are compatible with Java6 on Android.
  * <p/>
- * @see Helper7 for none-Android compatible methods.
  * @author Peter Karich
+ * @see Helper7 for none-Android compatible methods.
  */
 public class Helper
 {
-    private static final DistanceCalc dce = new DistanceCalcEarth();
+    public static final DistanceCalc DIST_EARTH = new DistanceCalcEarth();
+    public static final DistanceCalc3D DIST_3D = new DistanceCalc3D();
+    public static final DistancePlaneProjection DIST_PLANE = new DistancePlaneProjection();
     private static final Logger logger = LoggerFactory.getLogger(Helper.class);
     public static Charset UTF_CS = Charset.forName("UTF-8");
     public static final long MB = 1L << 20;
@@ -60,6 +64,10 @@ public class Helper
 
     public static Locale getLocale( String param )
     {
+        int pointIndex = param.indexOf('.');
+        if (pointIndex > 0)
+            param = param.substring(0, pointIndex);
+
         param = param.replace("-", "_");
         int index = param.indexOf("_");
         if (index < 0)
@@ -160,6 +168,27 @@ public class Helper
         } finally
         {
             reader.close();
+        }
+    }
+
+    public static String isToString( InputStream inputStream ) throws IOException
+    {
+        int size = 1024 * 8;
+        String encoding = "UTF-8";
+        InputStream in = new BufferedInputStream(inputStream, size);
+        try
+        {
+            byte[] buffer = new byte[size];
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            int numRead;
+            while ((numRead = in.read(buffer)) != -1)
+            {
+                output.write(buffer, 0, numRead);
+            }
+            return output.toString(encoding);
+        } finally
+        {
+            in.close();
         }
     }
 
@@ -271,7 +300,7 @@ public class Helper
         if (!graphBounds.isValid())
             throw new IllegalArgumentException("Bounding box is not valid to calculate index size: " + graphBounds);
 
-        double dist = dce.calcDist(graphBounds.maxLat, graphBounds.minLon,
+        double dist = DIST_EARTH.calcDist(graphBounds.maxLat, graphBounds.minLon,
                 graphBounds.minLat, graphBounds.maxLon);
         // convert to km and maximum is 50000km => 1GB
         dist = Math.min(dist / 1000, 50000);
@@ -335,6 +364,8 @@ public class Helper
     {
         if (deg >= Double.MAX_VALUE)
             return Integer.MAX_VALUE;
+        if (deg <= -Double.MAX_VALUE)
+            return -Integer.MAX_VALUE;
         return (int) (deg * DEGREE_FACTOR);
     }
 
@@ -347,6 +378,8 @@ public class Helper
     {
         if (storedInt == Integer.MAX_VALUE)
             return Double.MAX_VALUE;
+        if (storedInt == -Integer.MAX_VALUE)
+            return -Double.MAX_VALUE;
         return (double) storedInt / DEGREE_FACTOR;
     }
 

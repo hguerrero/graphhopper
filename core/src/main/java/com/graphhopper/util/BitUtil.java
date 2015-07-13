@@ -21,17 +21,17 @@ import java.nio.ByteOrder;
 
 /**
  * Examples for BIG endianess (default for Java and computer network).
- * <p>
+ * <p/>
  * byte array: 0=>0100 0001 , 1=>1110 1011, 2=>...
- * <p>
+ * <p/>
  * long: highest=>0100 0001 , 1110 1011, ..., lowest=> ...
- * <p>
+ * <p/>
  * bits to string 0100 0001 , 1110 1011, ...
- * <p>
+ * <p/>
  * LITTLE endianess (default for GraphHopper and most microprocessors)
- * <p>
+ * <p/>
  * byte array ..., 6=>1110 1011, 7=>0100 0001
- * <p>
+ * <p/>
  * @author Peter Karich
  */
 public abstract class BitUtil
@@ -195,6 +195,9 @@ public abstract class BitUtil
 
     public abstract byte[] fromBitString( String str );
 
+    /**
+     * Similar to Long.toBinaryString
+     */
     public final String toBitString( long value )
     {
         return toBitString(value, 64);
@@ -218,7 +221,7 @@ public abstract class BitUtil
 
     /**
      * Higher order bits comes first in the returned string.
-     * <p>
+     * <p/>
      * @param bits how many bits should be returned.
      */
     public String toBitString( long value, int bits )
@@ -251,7 +254,7 @@ public abstract class BitUtil
     public final long reverse( long value, int maxBits )
     {
         long res = 0;
-        for (; maxBits > 0; value >>= 1)
+        for (; maxBits > 0; value >>>= 1)
         {
             res <<= 1;
             res |= value & 1;
@@ -263,6 +266,21 @@ public abstract class BitUtil
             }
         }
         return res;
+    }
+
+    public final int getIntLow( long longValue )
+    {
+        return (int) (longValue & 0xFFFFFFFFL);
+    }
+
+    public final int getIntHigh( long longValue )
+    {
+        return (int) (longValue >> 32);
+    }
+
+    public final long combineIntsToLong( int intLow, int intHigh )
+    {
+        return ((long) intHigh << 32) | (intLow & 0xFFFFFFFFL);
     }
 
     public final long reverseLeft( long value, int maxBits )

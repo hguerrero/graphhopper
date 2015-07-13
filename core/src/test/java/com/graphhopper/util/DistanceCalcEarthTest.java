@@ -18,11 +18,12 @@
 package com.graphhopper.util;
 
 import com.graphhopper.util.shapes.GHPoint;
+
 import static org.junit.Assert.*;
+
 import org.junit.Test;
 
 /**
- *
  * @author Peter Karich
  */
 public class DistanceCalcEarthTest
@@ -33,18 +34,6 @@ public class DistanceCalcEarthTest
     public void testCalcCircumference()
     {
         assertEquals(DistanceCalcEarth.C, dc.calcCircumference(0), 1e-7);
-    }
-
-    @Test
-    public void testGeohashMaxDist()
-    {
-        DistanceCalcEarth dce = new DistanceCalcEarth();
-        assertEquals(DistanceCalcEarth.C / 2, dce.calcSpatialKeyMaxDist(0), 1);
-        assertEquals(DistanceCalcEarth.C / 2, dce.calcSpatialKeyMaxDist(1), 1);
-        assertEquals(DistanceCalcEarth.C / 4, dce.calcSpatialKeyMaxDist(2), 1);
-        assertEquals(DistanceCalcEarth.C / 4, dce.calcSpatialKeyMaxDist(3), 1);
-        assertEquals(DistanceCalcEarth.C / 8, dce.calcSpatialKeyMaxDist(4), 1);
-        assertEquals(DistanceCalcEarth.C / 8, dce.calcSpatialKeyMaxDist(5), 1);
     }
 
     @Test
@@ -130,6 +119,9 @@ public class DistanceCalcEarthTest
         assertFalse(dc.validEdgeDistance(49.944482, 11.555446, 49.937964, 11.541824, 49.942272, 11.555643));
         // right bottom of the edge
         assertFalse(dc.validEdgeDistance(49.94085, 11.557356, 49.937964, 11.541824, 49.942272, 11.555643));
+
+        // rounding error
+        // assertFalse(dc.validEdgeDistance(0.001, 0.001, 0.001, 0.002, 0.00099987, 0.00099987));
     }
 
     @Test

@@ -20,26 +20,27 @@ package com.graphhopper.util;
 
 import com.graphhopper.GHResponse;
 import com.graphhopper.routing.Path;
+
 import java.util.List;
 
 /**
  * This class merges a list of points into one point recognizing the specified places.
- * <p>
+ * <p/>
  * @author Peter Karich
  * @author ratrun
  */
 public class PathMerger
 {
     private boolean enableInstructions = true;
-    private boolean simplifyResponse = false;
+    private boolean simplifyResponse = true;
     private DouglasPeucker douglasPeucker;
-    private boolean calcPoints;
+    private boolean calcPoints = true;
 
     public void doWork( GHResponse rsp, List<Path> paths, Translation tr )
     {
         int origPoints = 0;
         StopWatch sw;
-        long fullMillis = 0;
+        long fullTimeInMillis = 0;
         double fullWeight = 0;
         double fullDistance = 0;
         boolean allFound = true;
@@ -49,7 +50,7 @@ public class PathMerger
         for (int pathIndex = 0; pathIndex < paths.size(); pathIndex++)
         {
             Path path = paths.get(pathIndex);
-            fullMillis += path.getMillis();
+            fullTimeInMillis += path.getTime();
             fullDistance += path.getDistance();
             fullWeight += path.getWeight();
             if (enableInstructions)
@@ -60,7 +61,11 @@ public class PathMerger
                 if (!il.isEmpty())
                 {
                     if (fullPoints.isEmpty())
-                        fullPoints = createSimilarPL(il.get(0).getPoints());
+                    {
+                        PointList pl = il.get(0).getPoints();
+                        // do a wild guess about the total number of points to avoid reallocation a bit
+                        fullPoints = new PointList(il.size() * Math.min(10, pl.size()), pl.is3D());
+                    }
 
                     for (Instruction i : il)
                     {
@@ -77,8 +82,9 @@ public class PathMerger
                     // if not yet reached finish replace with 'reached via'
                     if (pathIndex + 1 < paths.size())
                     {
-                        FinishInstruction fi = (FinishInstruction) fullInstructions.get(fullInstructions.size() - 1);
-                        fi.setVia(pathIndex + 1);
+                        ViaInstruction newInstr = new ViaInstruction(fullInstructions.get(fullInstructions.size() - 1));
+                        newInstr.setViaCount(pathIndex + 1);
+                        fullInstructions.replaceLast(newInstr);
                     }
                 }
 
@@ -86,7 +92,7 @@ public class PathMerger
             {
                 PointList tmpPoints = path.calcPoints();
                 if (fullPoints.isEmpty())
-                    fullPoints = createSimilarPL(tmpPoints);
+                    fullPoints = new PointList(tmpPoints.size(), tmpPoints.is3D());
 
                 if (simplifyResponse)
                 {
@@ -110,16 +116,14 @@ public class PathMerger
         if (enableInstructions)
             rsp.setInstructions(fullInstructions);
 
-        rsp.setFound(allFound).
-                setPoints(fullPoints).
-                setRouteWeight(fullWeight).
-                setDistance(fullDistance).
-                setMillis(fullMillis);
-    }
+        if (!allFound)
+        {
+            rsp.addError(new RuntimeException("Not found"));
+        }
 
-    PointList createSimilarPL( PointList pl )
-    {
-        return new PointList(pl.size(), pl.is3D());
+        rsp.setPoints(fullPoints).
+                setRouteWeight(fullWeight).
+                setDistance(fullDistance).setTime(fullTimeInMillis);
     }
 
     public PathMerger setCalcPoints( boolean calcPoints )

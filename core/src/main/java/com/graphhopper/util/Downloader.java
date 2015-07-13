@@ -29,7 +29,6 @@ import java.util.zip.InflaterInputStream;
  */
 public class Downloader
 {
-
     public static void main( String[] args ) throws IOException
     {
         new Downloader("GraphHopper Downloader").downloadAndUnzip("http://graphhopper.com/public/maps/0.1/europe_germany_berlin.ghz", "somefolder",
@@ -42,11 +41,11 @@ public class Downloader
                     }
                 });
     }
+
     private String referrer = "http://graphhopper.com";
     private final String userAgent;
     private String acceptEncoding = "gzip, deflate";
     private int timeout = 4000;
-    private int size = 1024 * 8;
 
     public Downloader( String userAgent )
     {
@@ -65,25 +64,35 @@ public class Downloader
         return this;
     }
 
-    public InputStream fetch( HttpURLConnection conn ) throws IOException
+    public InputStream fetch( HttpURLConnection conn, boolean readErrorStreamNoException ) throws IOException
     {
-        // create connection but before reading get the correct inputstream based on the compression
+        // create connection but before reading get the correct inputstream based on the compression and if error
         conn.connect();
-        String encoding = conn.getContentEncoding();
+
         InputStream is;
-        if (encoding != null && encoding.equalsIgnoreCase("gzip"))
-            is = new GZIPInputStream(conn.getInputStream());
-        else if (encoding != null && encoding.equalsIgnoreCase("deflate"))
-            is = new InflaterInputStream(conn.getInputStream(), new Inflater(true));
+        if (readErrorStreamNoException && conn.getResponseCode() >= 400 && conn.getErrorStream() != null)
+            is = conn.getErrorStream();
         else
             is = conn.getInputStream();
+
+        // wrap
+        try
+        {
+            String encoding = conn.getContentEncoding();
+            if (encoding != null && encoding.equalsIgnoreCase("gzip"))
+                is = new GZIPInputStream(is);
+            else if (encoding != null && encoding.equalsIgnoreCase("deflate"))
+                is = new InflaterInputStream(is, new Inflater(true));
+        } catch (IOException ex)
+        {
+        }
 
         return is;
     }
 
     public InputStream fetch( String url ) throws IOException
     {
-        return fetch((HttpURLConnection) createConnection(url));
+        return fetch((HttpURLConnection) createConnection(url), false);
     }
 
     public HttpURLConnection createConnection( String urlStr ) throws IOException
@@ -106,7 +115,8 @@ public class Downloader
     public void downloadFile( String url, String toFile ) throws IOException
     {
         HttpURLConnection conn = createConnection(url);
-        InputStream iStream = fetch(conn);
+        InputStream iStream = fetch(conn, false);
+        int size = 8 * 1024;
         BufferedOutputStream writer = new BufferedOutputStream(new FileOutputStream(toFile), size);
         InputStream in = new BufferedInputStream(iStream, size);
         try
@@ -128,40 +138,20 @@ public class Downloader
     {
         HttpURLConnection conn = createConnection(url);
         final int length = conn.getContentLength();
-        InputStream iStream = fetch(conn);
+        InputStream iStream = fetch(conn, false);
 
-        new Unzipper().setSize(size).unzip(iStream, new File(toFolder), new ProgressListener()
+        new Unzipper().unzip(iStream, new File(toFolder), new ProgressListener()
         {
             @Override
             public void update( long sumBytes )
             {
                 progressListener.update((int) (100 * sumBytes / length));
             }
-        });
+        });    
     }
 
-    public String downloadAsString( String url ) throws IOException
+    public String downloadAsString( String url, boolean readErrorStreamNoException ) throws IOException
     {
-        return readString(fetch(url));
-    }
-
-    private String readString( InputStream inputStream ) throws IOException
-    {
-        String encoding = "UTF-8";
-        InputStream in = new BufferedInputStream(inputStream, size);
-        try
-        {
-            byte[] buffer = new byte[size];
-            ByteArrayOutputStream output = new ByteArrayOutputStream();
-            int numRead;
-            while ((numRead = in.read(buffer)) != -1)
-            {
-                output.write(buffer, 0, numRead);
-            }
-            return output.toString(encoding);
-        } finally
-        {
-            in.close();
-        }
+        return Helper.isToString(fetch((HttpURLConnection) createConnection(url), readErrorStreamNoException));
     }
 }

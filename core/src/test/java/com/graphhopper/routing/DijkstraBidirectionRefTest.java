@@ -18,6 +18,7 @@
 package com.graphhopper.routing;
 
 import com.graphhopper.routing.util.*;
+
 import java.util.Arrays;
 import java.util.Collection;
 
@@ -28,7 +29,6 @@ import org.junit.runners.Parameterized.Parameters;
 import com.graphhopper.storage.Graph;
 
 /**
- *
  * @author Peter Karich
  */
 @RunWith(Parameterized.class)
@@ -37,16 +37,16 @@ public class DijkstraBidirectionRefTest extends AbstractRoutingAlgorithmTester
     /**
      * Runs the same test with each of the supported traversal modes
      */
-    @Parameters
+    @Parameters(name = "{0}")
     public static Collection<Object[]> configs()
     {
         return Arrays.asList(new Object[][]
-        {
-            { TraversalMode.NODE_BASED },
-            { TraversalMode.EDGE_BASED_1DIR },
-            { TraversalMode.EDGE_BASED_2DIR },
-            { TraversalMode.EDGE_BASED_2DIR_UTURN }
-        });
+                {
+                        {TraversalMode.NODE_BASED},
+                        {TraversalMode.EDGE_BASED_1DIR},
+                        {TraversalMode.EDGE_BASED_2DIR},
+                        {TraversalMode.EDGE_BASED_2DIR_UTURN}
+                });
     }
 
     private final TraversalMode traversalMode;
@@ -57,15 +57,15 @@ public class DijkstraBidirectionRefTest extends AbstractRoutingAlgorithmTester
     }
 
     @Override
-    public AlgorithmPreparation prepareGraph( Graph defaultGraph, final FlagEncoder encoder, final Weighting w )
+    public RoutingAlgorithmFactory createFactory( Graph prepareGraph, AlgorithmOptions prepareOpts )
     {
-        return new NoOpAlgorithmPreparation()
+        return new RoutingAlgorithmFactory()
         {
             @Override
-            public RoutingAlgorithm createAlgo()
+            public RoutingAlgorithm createAlgo( Graph g, AlgorithmOptions opts )
             {
-                return new DijkstraBidirectionRef(_graph, encoder, w, traversalMode);
+                return new DijkstraBidirectionRef(g, opts.getFlagEncoder(), opts.getWeighting(), traversalMode);
             }
-        }.setGraph(defaultGraph);
+        };
     }
 }

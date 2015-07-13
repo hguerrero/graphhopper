@@ -22,11 +22,12 @@ import com.graphhopper.storage.GraphBuilder;
 import com.graphhopper.storage.Graph;
 import com.graphhopper.storage.LevelGraph;
 import com.graphhopper.storage.NodeAccess;
+
 import static org.junit.Assert.*;
+
 import org.junit.Test;
 
 /**
- *
  * @author Peter Karich
  */
 public class GHUtilityTest
@@ -111,7 +112,7 @@ public class GHUtilityTest
         LevelGraph lg = new GraphBuilder(encodingManager).levelGraphCreate();
         GHUtility.copyTo(g, lg);
 
-        assertEquals(g.getAllEdges().getMaxId(), lg.getAllEdges().getMaxId());
+        assertEquals(g.getAllEdges().getCount(), lg.getAllEdges().getCount());
     }
 
     @Test

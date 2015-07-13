@@ -18,8 +18,10 @@
 package com.graphhopper;
 
 import com.graphhopper.util.InstructionList;
+import com.graphhopper.util.PMap;
 import com.graphhopper.util.PointList;
 import com.graphhopper.util.shapes.BBox;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -34,10 +36,10 @@ public class GHResponse
     private final List<Throwable> errors = new ArrayList<Throwable>(4);
     private PointList list = PointList.EMPTY;
     private double distance;
-    private double weight;
+    private double routeWeight;
     private long time;
-    private InstructionList instructions = InstructionList.EMPTY;
-    private boolean found;
+    private InstructionList instructions;
+    private final PMap hintsMap = new PMap();
 
     public GHResponse()
     {
@@ -45,6 +47,7 @@ public class GHResponse
 
     public String getDebugInfo()
     {
+        check("getDebugInfo");
         return debugInfo;
     }
 
@@ -53,6 +56,15 @@ public class GHResponse
         if (debugInfo != null)
             this.debugInfo = debugInfo;
         return this;
+    }
+
+    private void check( String method )
+    {
+        if (hasErrors())
+        {
+            throw new RuntimeException("You cannot call " + method + " if response contains errors. Check this with ghResponse.hasErrors(). "
+                    + "Errors are: " + getErrors());
+        }
     }
 
     /**
@@ -88,6 +100,7 @@ public class GHResponse
      */
     public PointList getPoints()
     {
+        check("getPoints");
         return list;
     }
 
@@ -100,15 +113,16 @@ public class GHResponse
     /**
      * This method returns the distance of the path. Always prefer this method over
      * getPoints().calcDistance
-     * <p>
+     * <p/>
      * @return distance in meter
      */
     public double getDistance()
     {
+        check("getDistance");
         return distance;
     }
 
-    public GHResponse setMillis( long timeInMillis )
+    public GHResponse setTime( long timeInMillis )
     {
         this.time = timeInMillis;
         return this;
@@ -116,15 +130,26 @@ public class GHResponse
 
     /**
      * @return time in millis
+     * @deprecated use getTime instead
      */
     public long getMillis()
     {
+        check("getMillis");
+        return time;
+    }
+
+    /**
+     * @return time in millis
+     */
+    public long getTime()
+    {
+        check("getTimes");
         return time;
     }
 
     public GHResponse setRouteWeight( double weight )
     {
-        this.weight = weight;
+        this.routeWeight = weight;
         return this;
     }
 
@@ -135,18 +160,8 @@ public class GHResponse
      */
     public double getRouteWeight()
     {
-        return weight;
-    }
-
-    public GHResponse setFound( boolean found )
-    {
-        this.found = found;
-        return this;
-    }
-
-    public boolean isFound()
-    {
-        return found;
+        check("getRouteWeight");
+        return routeWeight;
     }
 
     /**
@@ -154,7 +169,8 @@ public class GHResponse
      */
     public BBox calcRouteBBox( BBox _fallback )
     {
-        BBox bounds = BBox.INVERSE.clone();
+        check("calcRouteBBox");
+        BBox bounds = BBox.createInverse(_fallback.hasElevation());
         int len = list.getSize();
         if (len == 0)
             return _fallback;
@@ -163,17 +179,14 @@ public class GHResponse
         {
             double lat = list.getLatitude(i);
             double lon = list.getLongitude(i);
-            if (lat > bounds.maxLat)
-                bounds.maxLat = lat;
-
-            if (lat < bounds.minLat)
-                bounds.minLat = lat;
-
-            if (lon > bounds.maxLon)
-                bounds.maxLon = lon;
-
-            if (lon < bounds.minLon)
-                bounds.minLon = lon;
+            if (bounds.hasElevation())
+            {
+                double ele = list.getEle(i);
+                bounds.update(lat, lon, ele);
+            } else
+            {
+                bounds.update(lat, lon);
+            }
         }
         return bounds;
     }
@@ -181,8 +194,8 @@ public class GHResponse
     @Override
     public String toString()
     {
-        String str = "found:" + isFound() + ", nodes:" + list.getSize() + ": " + list.toString();
-        if (!instructions.isEmpty())
+        String str = "nodes:" + list.getSize() + "; " + list.toString();
+        if (instructions != null && !instructions.isEmpty())
             str += ", " + instructions.toString();
 
         if (hasErrors())
@@ -198,6 +211,15 @@ public class GHResponse
 
     public InstructionList getInstructions()
     {
+        check("getInstructions");
+        if (instructions == null)
+            throw new IllegalArgumentException("To access instructions you need to enable creation before routing");
+
         return instructions;
+    }
+
+    public PMap getHints()
+    {
+        return hintsMap;
     }
 }

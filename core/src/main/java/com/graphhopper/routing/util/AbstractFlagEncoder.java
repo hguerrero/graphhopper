@@ -17,19 +17,14 @@
  */
 package com.graphhopper.routing.util;
 
-import java.util.Collection;
-import java.util.HashSet;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.graphhopper.reader.OSMNode;
-import com.graphhopper.reader.OSMReader;
-import com.graphhopper.reader.OSMTurnRelation;
 import com.graphhopper.reader.OSMWay;
 import com.graphhopper.reader.OSMRelation;
-import com.graphhopper.reader.OSMTurnRelation.TurnCostTableEntry;
 import com.graphhopper.util.*;
+
 import java.util.*;
 
 /**
@@ -44,7 +39,7 @@ import java.util.*;
 public abstract class AbstractFlagEncoder implements FlagEncoder, TurnCostEncoder
 {
     private final static Logger logger = LoggerFactory.getLogger(AbstractFlagEncoder.class);
-
+    protected final static int K_FORWARD = 0, K_BACKWARD = 1;
     /* Edge Flag Encoder fields */
     private long nodeBitMask;
     private long wayBitMask;
@@ -58,6 +53,12 @@ public abstract class AbstractFlagEncoder implements FlagEncoder, TurnCostEncode
     protected long acceptBit;
     protected long ferryBit;
 
+    protected PMap properties;
+
+    // This value determines the maximal possible speed of any road regardless the maxspeed value
+    // lower values allow more compact representation of the routing graph
+    protected int maxPossibleSpeed;
+
     private EncodedValue turnCostEncoder;
     private long turnRestrictionBit;
     private final int maxTurnCosts;
@@ -68,18 +69,28 @@ public abstract class AbstractFlagEncoder implements FlagEncoder, TurnCostEncode
 
     /* restriction definitions where order is important */
     protected final List<String> restrictions = new ArrayList<String>(5);
-    protected final HashSet<String> intendedValues = new HashSet<String>(5);
-    protected final HashSet<String> restrictedValues = new HashSet<String>(5);
-    protected final HashSet<String> ferries = new HashSet<String>(5);
-    protected final HashSet<String> oneways = new HashSet<String>(5);
-    protected final HashSet<String> acceptedRailways = new HashSet<String>(5);
+    protected final Set<String> intendedValues = new HashSet<String>(5);
+    protected final Set<String> restrictedValues = new HashSet<String>(5);
+    protected final Set<String> ferries = new HashSet<String>(5);
+    protected final Set<String> oneways = new HashSet<String>(5);
+    protected final Set<String> acceptedRailways = new HashSet<String>(5);
     // http://wiki.openstreetmap.org/wiki/Mapfeatures#Barrier
-    protected final HashSet<String> absoluteBarriers = new HashSet<String>(5);
-    protected final HashSet<String> potentialBarriers = new HashSet<String>(5);
+    protected final Set<String> absoluteBarriers = new HashSet<String>(5);
+    protected final Set<String> potentialBarriers = new HashSet<String>(5);
     private boolean blockByDefault = true;
     private boolean blockFords = true;
     protected final int speedBits;
     protected final double speedFactor;
+
+    public AbstractFlagEncoder( PMap properties )
+    {
+        throw new RuntimeException("This method must be overridden in derived classes");
+    }
+
+    public AbstractFlagEncoder( String propertiesStr )
+    {
+        this(new PMap(propertiesStr));
+    }
 
     /**
      * @param speedBits specify the number of bits used for speed
@@ -132,7 +143,7 @@ public abstract class AbstractFlagEncoder implements FlagEncoder, TurnCostEncode
 
     /**
      * Defines the bits for the node flags, which are currently used for barriers only.
-     * <p>
+     * <p/>
      * @return incremented shift value pointing behind the last used bit
      */
     public int defineNodeBits( int index, int shift )
@@ -143,7 +154,6 @@ public abstract class AbstractFlagEncoder implements FlagEncoder, TurnCostEncode
     /**
      * Defines bits used for edge flags used for access, speed etc.
      * <p/>
-     * @param index
      * @param shift bit offset for the first bit used by this encoder
      * @return incremented shift value pointing behind the last used bit
      */
@@ -170,7 +180,7 @@ public abstract class AbstractFlagEncoder implements FlagEncoder, TurnCostEncode
 
     /**
      * Defines the bits which are used for relation flags.
-     * <p>
+     * <p/>
      * @return incremented shift value pointing behind the last used bit
      */
     public int defineRelationBits( int index, int shift )
@@ -230,10 +240,15 @@ public abstract class AbstractFlagEncoder implements FlagEncoder, TurnCostEncode
                 return directionBitMask;
         }
 
+        // In case explicit flag ford=no, don't block
         if (blockFords
                 && (node.hasTag("highway", "ford") || node.hasTag("ford"))
-                && !node.hasTag(restrictions, intendedValues))
+                && !node.hasTag(restrictions, intendedValues)
+                && !node.hasTag("ford", "no"))
+        {
             return directionBitMask;
+
+        }
 
         return 0;
     }
@@ -276,13 +291,22 @@ public abstract class AbstractFlagEncoder implements FlagEncoder, TurnCostEncode
     @Override
     public long setSpeed( long flags, double speed )
     {
-        if (speed < 0)
-            throw new IllegalArgumentException("Speed cannot be negative: " + speed
+        if (speed < 0 || Double.isNaN(speed))
+            throw new IllegalArgumentException("Speed cannot be negative or NaN: " + speed
                     + ", flags:" + BitUtil.LITTLE.toBitString(flags));
+
+        if (speed < speedEncoder.factor / 2)
+            return setLowSpeed(flags, speed, false);
 
         if (speed > getMaxSpeed())
             speed = getMaxSpeed();
+
         return speedEncoder.setDoubleValue(flags, speed);
+    }
+
+    protected long setLowSpeed( long flags, double speed, boolean reverse )
+    {
+        return setAccess(speedEncoder.setDoubleValue(flags, 0), false, false);
     }
 
     @Override
@@ -364,10 +388,23 @@ public abstract class AbstractFlagEncoder implements FlagEncoder, TurnCostEncode
     /**
      * @return the speed in km/h
      */
-    protected static double parseSpeed( String str )
+    protected double parseSpeed( String str )
     {
         if (Helper.isEmpty(str))
             return -1;
+
+        // on some German autobahns and a very few other places
+        if ("none".equals(str))
+            return 140;
+
+        if (str.endsWith(":rural") || str.endsWith(":trunk"))
+            return 80;
+
+        if (str.endsWith(":urban"))
+            return 50;
+
+        if (str.equals("walk") || str.endsWith(":living_street"))
+            return 6;
 
         try
         {
@@ -541,7 +578,7 @@ public abstract class AbstractFlagEncoder implements FlagEncoder, TurnCostEncode
 
     /**
      * Defines the bits reserved for storing turn restriction and turn cost
-     * <p>
+     * <p/>
      * @param shift bit offset for the first bit used by this encoder
      * @return incremented shift value pointing behind the last used bit
      */
@@ -550,7 +587,7 @@ public abstract class AbstractFlagEncoder implements FlagEncoder, TurnCostEncode
         if (maxTurnCosts == 0)
             return shift;
 
-        // optimization for turn restrictions only 
+        // optimization for turn restrictions only
         else if (maxTurnCosts == 1)
         {
             turnRestrictionBit = 1L << shift;
@@ -566,7 +603,7 @@ public abstract class AbstractFlagEncoder implements FlagEncoder, TurnCostEncode
             {
                 // find value
                 flags &= mask;
-                flags >>= shift;
+                flags >>>= shift;
                 return flags;
             }
         };
@@ -633,19 +670,6 @@ public abstract class AbstractFlagEncoder implements FlagEncoder, TurnCostEncode
         return turnCostEncoder.setValue(0L, (int) costs);
     }
 
-    public Collection<TurnCostTableEntry> analyzeTurnRelation( OSMTurnRelation turnRelation, OSMReader osmReader )
-    {
-        if (!supports(TurnWeighting.class))
-            return Collections.emptyList();
-
-        if (edgeOutExplorer == null || edgeInExplorer == null)
-        {
-            edgeOutExplorer = osmReader.getGraphStorage().createEdgeExplorer(new DefaultEdgeFilter(this, false, true));
-            edgeInExplorer = osmReader.getGraphStorage().createEdgeExplorer(new DefaultEdgeFilter(this, true, false));
-        }
-        return turnRelation.getRestrictionAsEntries(this, edgeOutExplorer, edgeInExplorer, osmReader);
-    }
-
     protected boolean isFerry( long internalFlags )
     {
         return (internalFlags & ferryBit) != 0;
@@ -654,6 +678,18 @@ public abstract class AbstractFlagEncoder implements FlagEncoder, TurnCostEncode
     protected boolean isAccept( long internalFlags )
     {
         return (internalFlags & acceptBit) != 0;
+    }
+
+    @Override
+    public boolean isBackward( long flags )
+    {
+        return (flags & backwardBit) != 0;
+    }
+
+    @Override
+    public boolean isForward( long flags )
+    {
+        return (flags & forwardBit) != 0;
     }
 
     @Override
@@ -678,9 +714,9 @@ public abstract class AbstractFlagEncoder implements FlagEncoder, TurnCostEncode
         switch (key)
         {
             case K_FORWARD:
-                return (flags & forwardBit) != 0;
+                return isForward(flags);
             case K_BACKWARD:
-                return (flags & backwardBit) != 0;
+                return isBackward(flags);
             case K_ROUNDABOUT:
                 return (flags & roundaboutBit) != 0;
             default:
@@ -712,6 +748,7 @@ public abstract class AbstractFlagEncoder implements FlagEncoder, TurnCostEncode
         throw new UnsupportedOperationException("Unknown key " + key + " for double value.");
     }
 
+    @Deprecated
     protected static double parseDouble( String str, String key, double defaultD )
     {
         String val = getStr(str, key);
@@ -720,6 +757,7 @@ public abstract class AbstractFlagEncoder implements FlagEncoder, TurnCostEncode
         return Double.parseDouble(val);
     }
 
+    @Deprecated
     protected static long parseLong( String str, String key, long defaultL )
     {
         String val = getStr(str, key);
@@ -728,6 +766,7 @@ public abstract class AbstractFlagEncoder implements FlagEncoder, TurnCostEncode
         return Long.parseLong(val);
     }
 
+    @Deprecated
     protected static boolean parseBoolean( String str, String key, boolean defaultB )
     {
         String val = getStr(str, key);
@@ -736,6 +775,7 @@ public abstract class AbstractFlagEncoder implements FlagEncoder, TurnCostEncode
         return Boolean.parseBoolean(val);
     }
 
+    @Deprecated
     protected static String getStr( String str, String key )
     {
         key = key.toLowerCase();

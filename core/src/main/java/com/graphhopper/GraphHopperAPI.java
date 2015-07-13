@@ -20,27 +20,6 @@ package com.graphhopper;
 /**
  * Wrapper of the graphhopper online or offline API. Provides read only access.
  * <p/>
- * Usage:
- * <pre>
- *
- * // init offline graph
- * GraphHopperAPI gh = new GraphHopper().setInMemory(true);
- * gh.load("graph-hopper-folder");
- *
- * // init online service
- * GraphHopperAPI gh = new GraphHopperWeb();
- * gh.load("http://your-graphhopper-service.com");
- *
- * gh.algorithm("astar");
- * GHResponse ph = gh.route(new GHRequest(new GHPoint(fromLat, fromLon), new GHPoint(toLat, toLon)));
- * print(ph.distance() + " " + ph.time());
- * PointList points = response.getPoints();
- * for(int i = 0; i &lt; points.size(); i++) {
- *    add(point.latitude(i), point.longitude(i));
- * }
- *
- * </pre>
- * <p/>
  * @author Peter Karich
  */
 public interface GraphHopperAPI
@@ -48,7 +27,7 @@ public interface GraphHopperAPI
     /**
      * Connects to the specified service (graphhopper URL) or loads a graph from the graphhopper
      * folder.
-     * <p>
+     * <p/>
      * @return true if successfully connected or loaded
      */
     boolean load( String urlOrFile );

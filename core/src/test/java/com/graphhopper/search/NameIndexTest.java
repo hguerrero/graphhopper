@@ -18,11 +18,13 @@
 package com.graphhopper.search;
 
 import com.graphhopper.storage.RAMDirectory;
+import com.graphhopper.util.Helper;
+import java.io.File;
 import org.junit.Test;
+
 import static org.junit.Assert.*;
 
 /**
- *
  * @author Peter Karich
  */
 public class NameIndexTest
@@ -37,7 +39,7 @@ public class NameIndexTest
         {
             str += "ß";
         }
-        int result = index.put(str);
+        long result = index.put(str);
         assertEquals(127, index.get(result).length());
     }
 
@@ -45,10 +47,10 @@ public class NameIndexTest
     public void testPut()
     {
         NameIndex index = new NameIndex(new RAMDirectory()).create(1000);
-        int result = index.put("Something Streetä");
+        long result = index.put("Something Streetä");
         assertEquals("Something Streetä", index.get(result));
 
-        int existing = index.put("Something Streetä");
+        long existing = index.put("Something Streetä");
         assertEquals(result, existing);
 
         result = index.put("testing");
@@ -65,10 +67,10 @@ public class NameIndexTest
     {
         NameIndex index = new NameIndex(new RAMDirectory()).create(1000);
         String str1 = "nice";
-        int pointer1 = index.put(str1);
+        long pointer1 = index.put(str1);
 
         String str2 = "nice work äöß";
-        int pointer2 = index.put(str2);
+        long pointer2 = index.put(str2);
 
         assertEquals(str2, index.get(pointer2));
         assertEquals(str1, index.get(pointer1));
@@ -89,5 +91,27 @@ public class NameIndexTest
         }
         index.put(str);
         index.close();
+    }
+
+    @Test
+    public void testFlush()
+    {
+        String location = "./target/nameindex-store";
+        Helper.removeDir(new File(location));
+
+        NameIndex index = new NameIndex(new RAMDirectory(location, true)).create(1000);
+        long pointer = index.put("test");
+        index.flush();
+        index.close();
+
+        index = new NameIndex(new RAMDirectory(location, true));
+        assertTrue(index.loadExisting());
+        assertEquals("test", index.get(pointer));
+        // make sure bytePointer is correctly set after loadExisting
+        long newPointer = index.put("testing");
+        assertEquals(newPointer + ">" + pointer, pointer + "test".getBytes().length + 1, newPointer);
+        index.close();
+
+        Helper.removeDir(new File(location));
     }
 }

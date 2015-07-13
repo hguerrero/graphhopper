@@ -23,7 +23,7 @@ import java.io.IOException;
 
 /**
  * Creates a write lock file. Influenced by Lucene code
- * <p>
+ * <p/>
  * @author Peter Karich
  */
 public class SimpleFSLockFactory implements LockFactory
@@ -113,7 +113,7 @@ public class SimpleFSLockFactory implements LockFactory
         @Override
         public synchronized void release()
         {
-            if (isLocked() && !lockFile.delete())
+            if (isLocked() && lockFile.exists() && !lockFile.delete())
                 throw new RuntimeException("Cannot release lock file: " + lockFile);
         }
 

@@ -20,8 +20,7 @@ package com.graphhopper.ui;
 import com.graphhopper.GraphHopper;
 import com.graphhopper.coll.GHBitSet;
 import com.graphhopper.coll.GHTBitSet;
-import com.graphhopper.routing.Path;
-import com.graphhopper.routing.RoutingAlgorithm;
+import com.graphhopper.routing.*;
 import com.graphhopper.routing.util.*;
 import com.graphhopper.storage.Graph;
 import com.graphhopper.storage.NodeAccess;
@@ -30,10 +29,12 @@ import com.graphhopper.storage.index.QueryResult;
 import com.graphhopper.util.*;
 import com.graphhopper.util.shapes.BBox;
 import gnu.trove.list.TIntList;
+
 import java.awt.*;
 import java.awt.event.*;
 import java.util.Random;
 import javax.swing.*;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -55,9 +56,10 @@ public class MiniGraphUI
         boolean debug = args.getBool("minigraphui.debug", false);
         new MiniGraphUI(hopper, debug).visualize();
     }
+
     private Logger logger = LoggerFactory.getLogger(getClass());
     private Path path;
-    private AlgorithmPreparation prepare;
+    private RoutingAlgorithmFactory algoFactory;
     private final Graph graph;
     private final NodeAccess na;
     private LocationIndexTree index;
@@ -70,18 +72,18 @@ public class MiniGraphUI
     private boolean fastPaint = false;
     private final Weighting weighting;
     private final FlagEncoder encoder;
+    private AlgorithmOptions algoOpts;
 
     public MiniGraphUI( GraphHopper hopper, boolean debug )
     {
         this.graph = hopper.getGraph();
         this.na = graph.getNodeAccess();
-        prepare = hopper.getPreparation();
-        encoder = hopper.getEncodingManager().getSingle();
+        algoFactory = hopper.getAlgorithmFactory();
+        encoder = hopper.getEncodingManager().getEncoder("car");
         weighting = hopper.createWeighting(new WeightingMap("fastest"), encoder);
-        if (prepare == null)
-            prepare = NoOpAlgorithmPreparation.createAlgoPrepare(graph, "dijkstrabi", encoder, weighting, TraversalMode.NODE_BASED);
+        algoOpts = new AlgorithmOptions(AlgorithmOptions.DIJKSTRA_BI, encoder, weighting);
 
-        logger.info("locations:" + graph.getNodes() + ", debug:" + debug + ", algo:" + prepare.createAlgo().getName());
+        logger.info("locations:" + graph.getNodes() + ", debug:" + debug + ", algoOpts:" + algoOpts);
         mg = new GraphicsWrapper(graph);
 
         // prepare node quadtree to 'enter' the graph. create a 313*313 grid => <3km
@@ -147,6 +149,8 @@ public class MiniGraphUI
                 g2.setColor(Color.black);
 
                 EdgeExplorer explorer = graph.createEdgeExplorer(EdgeFilter.ALL_EDGES);
+                Color[] speedColors = generateColors(15);
+
                 for (int nodeIndex = 0; nodeIndex < locs; nodeIndex++)
                 {
                     if (fastPaint && rand.nextInt(30) > 1)
@@ -158,10 +162,10 @@ public class MiniGraphUI
                     if (lat < b.minLat || lat > b.maxLat || lon < b.minLon || lon > b.maxLon)
                         continue;
 
-                    EdgeIterator iter = explorer.setBaseNode(nodeIndex);
-                    while (iter.next())
+                    EdgeIterator edge = explorer.setBaseNode(nodeIndex);
+                    while (edge.next())
                     {
-                        int nodeId = iter.getAdjNode();
+                        int nodeId = edge.getAdjNode();
                         int sum = nodeIndex + nodeId;
                         if (fastPaint)
                         {
@@ -175,11 +179,49 @@ public class MiniGraphUI
 
                         // mg.plotText(g2, lat * 0.9 + lat2 * 0.1, lon * 0.9 + lon2 * 0.1, iter.getName());
                         //mg.plotText(g2, lat * 0.9 + lat2 * 0.1, lon * 0.9 + lon2 * 0.1, "s:" + (int) encoder.getSpeed(iter.getFlags()));
-                        //g2.setColor(Color.BLACK);                        
-                        mg.plotEdge(g2, lat, lon, lat2, lon2);
-                        g2.setColor(Color.BLACK);
+                        double speed = encoder.getSpeed(edge.getFlags());
+                        Color color;
+                        if (speed >= 120)
+                        {
+                            // red
+                            color = speedColors[12];
+                        } else if (speed >= 100)
+                        {
+                            color = speedColors[10];
+                        } else if (speed >= 80)
+                        {
+                            color = speedColors[8];
+                        } else if (speed >= 60)
+                        {
+                            color = speedColors[6];
+                        } else if (speed >= 50)
+                        {
+                            color = speedColors[5];
+                        } else if (speed >= 40)
+                        {
+                            color = speedColors[4];
+                        } else if (speed >= 30)
+                        {
+                            color = Color.GRAY;
+                        } else
+                        {
+                            color = Color.LIGHT_GRAY;
+                        }
+
+                        g2.setColor(color);
+                        mg.plotEdge(g2, lat, lon, lat2, lon2, 1.2f);
                     }
                 }
+
+                g2.setColor(Color.WHITE);
+                g2.fillRect(0, 0, 1000, 20);
+                for (int i = 4; i < speedColors.length; i++)
+                {
+                    g2.setColor(speedColors[i]);
+                    g2.drawString("" + (i * 10), i * 30 - 100, 10);
+                }
+
+                g2.setColor(Color.BLACK);
             }
         });
 
@@ -192,7 +234,8 @@ public class MiniGraphUI
                     return;
 
                 makeTransparent(g2);
-                RoutingAlgorithm algo = prepare.createAlgo();
+                QueryGraph qGraph = new QueryGraph(graph).lookup(fromRes, toRes);
+                RoutingAlgorithm algo = algoFactory.createAlgo(qGraph, algoOpts);
                 if (algo instanceof DebugAlgo)
                 {
                     ((DebugAlgo) algo).setGraphics2D(g2);
@@ -215,7 +258,7 @@ public class MiniGraphUI
 //                    mg.plotText(g2, lat, lon, nodeId + ": " + dist);
 //                    mg.plotNode(g2, nodeId, Color.red);
 //                }
-                path = algo.calcPath(fromRes, toRes);
+                path = algo.calcPath(fromRes.getClosestNode(), toRes.getClosestNode());
                 sw.stop();
 
                 // if directed edges
@@ -226,7 +269,7 @@ public class MiniGraphUI
                 }
 
                 logger.info("found path in " + sw.getSeconds() + "s with nodes:"
-                        + path.calcNodes().size() + ", millis: " + path.getMillis() + ", " + path);
+                        + path.calcNodes().size() + ", millis: " + path.getTime() + ", " + path);
                 g2.setColor(Color.BLUE.brighter().brighter());
                 plotPath(path, g2, 1);
             }
@@ -239,6 +282,16 @@ public class MiniGraphUI
             repaintManager.setDoubleBufferingEnabled(false);
             mainPanel.setBuffering(false);
         }
+    }
+
+    public Color[] generateColors( int n )
+    {
+        Color[] cols = new Color[n];
+        for (int i = 0; i < n; i++)
+        {
+            cols[i] = Color.getHSBColor((float) i / (float) n, 0.85f, 1.0f);
+        }
+        return cols;
     }
 
     // for debugging
@@ -299,6 +352,7 @@ public class MiniGraphUI
         logger.info("dist:" + tmpPath.getDistance() + ", path points(" + list.getSize() + "):" + list + ", nodes:" + nodes);
         return tmpPath;
     }
+
     private QueryResult fromRes;
     private QueryResult toRes;
 
@@ -379,6 +433,7 @@ public class MiniGraphUI
 
                             fromDone = !fromDone;
                         }
+
                         boolean dragging = false;
 
                         @Override
@@ -449,6 +504,7 @@ public class MiniGraphUI
             throw new RuntimeException(ex);
         }
     }
+
     // for moving
     int currentPosX;
     int currentPosY;

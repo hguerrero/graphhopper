@@ -31,7 +31,7 @@ import org.slf4j.LoggerFactory;
 public class DefaultModule extends AbstractModule
 {
     private final Logger logger = LoggerFactory.getLogger(getClass());
-    private final CmdArgs args;
+    protected final CmdArgs args;
     private GraphHopper graphHopper;
 
     public DefaultModule( CmdArgs args )
@@ -77,6 +77,8 @@ public class DefaultModule extends AbstractModule
                 logger.info("jsonp disabled");
 
             bind(Boolean.class).annotatedWith(Names.named("jsonpAllowed")).toInstance(jsonpAllowed);
+
+            bind(RouteSerializer.class).toInstance(new SimpleRouteSerializer(graphHopper.getGraph().getBounds()));
         } catch (Exception ex)
         {
             throw new IllegalStateException("Couldn't load graph", ex);

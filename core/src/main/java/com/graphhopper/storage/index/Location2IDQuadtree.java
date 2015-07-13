@@ -24,14 +24,12 @@ import com.graphhopper.geohash.KeyAlgo;
 import com.graphhopper.geohash.LinearKeyAlgo;
 import com.graphhopper.routing.util.EdgeFilter;
 import com.graphhopper.storage.*;
-import com.graphhopper.util.DistanceCalc;
-import com.graphhopper.util.DistanceCalcEarth;
-import com.graphhopper.util.DistancePlaneProjection;
-import com.graphhopper.util.StopWatch;
-import com.graphhopper.util.BreadthFirstSearch;
+import com.graphhopper.util.*;
 import com.graphhopper.util.shapes.BBox;
 import com.graphhopper.util.shapes.GHPoint;
+
 import java.util.Arrays;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,17 +38,17 @@ import org.slf4j.LoggerFactory;
  * implementation is the a very memory efficient representation for areas with lots of node and
  * edges, but lacks precision. No edge distances are measured.
  * <p/>
+ * @author Peter Karich
  * @see LocationIndexTree which is more precise but more complicated and also slightly slower
  * implementation of LocationIndex.
  * <p/>
- * @author Peter Karich
  */
 class Location2IDQuadtree implements LocationIndex
 {
     private final static int MAGIC_INT = Integer.MAX_VALUE / 12306;
     private final Logger logger = LoggerFactory.getLogger(getClass());
     private KeyAlgo keyAlgo;
-    protected DistanceCalc distCalc = new DistancePlaneProjection();
+    protected DistanceCalc distCalc = Helper.DIST_PLANE;
     private final DataAccess index;
     private double maxRasterWidth2InMeterNormed;
     private final Graph graph;
@@ -69,9 +67,9 @@ class Location2IDQuadtree implements LocationIndex
     public LocationIndex setApproximation( boolean approxDist )
     {
         if (approxDist)
-            distCalc = new DistancePlaneProjection();
+            distCalc = Helper.DIST_PLANE;
         else
-            distCalc = new DistanceCalcEarth();
+            distCalc = Helper.DIST_EARTH;
 
         return this;
     }
@@ -320,7 +318,7 @@ class Location2IDQuadtree implements LocationIndex
 
     @Override
     public QueryResult findClosest( final double queryLat, final double queryLon,
-            final EdgeFilter edgeFilter )
+                                    final EdgeFilter edgeFilter )
     {
         if (isClosed())
             throw new IllegalStateException("You need to create a new LocationIndex instance as it is already closed");

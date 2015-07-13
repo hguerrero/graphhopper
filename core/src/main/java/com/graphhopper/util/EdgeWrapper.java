@@ -17,15 +17,17 @@
  */
 package com.graphhopper.util;
 
+import com.graphhopper.routing.PathBidir;
 import gnu.trove.map.hash.TIntIntHashMap;
+
 import java.util.Arrays;
 
 /**
  * This class acts as a HashMap (nodes to weights) and is used to implement references from one edge
  * to its parent.
  * <p/>
- * @see DijkstraBidirection
  * @author Peter Karich
+ * @see PathBidir
  */
 @NotThreadSafe
 public class EdgeWrapper

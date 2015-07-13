@@ -9,6 +9,33 @@ window.log = function () {
     }
 };
 
+// compatiblity script taken from http://stackoverflow.com/a/11054570/194609
+if (!Function.prototype.bind) {
+    Function.prototype.bind = function (oThis) {
+        if (typeof this !== 'function') {
+            // closest thing possible to the ECMAScript 5
+            // internal IsCallable function
+            throw new TypeError('Function.prototype.bind - what is trying to be bound is not callable');
+        }
+
+        var aArgs = Array.prototype.slice.call(arguments, 1),
+                fToBind = this,
+                fNOP = function () {
+                },
+                fBound = function () {
+                    return fToBind.apply(this instanceof fNOP && oThis
+                            ? this
+                            : oThis,
+                            aArgs.concat(Array.prototype.slice.call(arguments)));
+                };
+
+        fNOP.prototype = this.prototype;
+        fBound.prototype = new fNOP();
+
+        return fBound;
+    };
+}
+
 GHRequest = function (host) {
     this.way_point_max_distance = 1;
     this.host = host;
@@ -26,11 +53,13 @@ GHRequest = function (host) {
     this.do_zoom = true;
     // use jsonp here if host allows CORS
     this.dataType = "json";
-    
+    // all URL parameters starting with "api." will be forwarded to GraphHopper directly    
+    this.api_params = [];
+
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // We know that you love 'free', we love it too :)! And so our entire software stack is free and even Open Source!      
     // Our routing service is also free for certain applications or smaller volume. Be fair, grab an API key and support us:
-    // http://graphhopper.com/#enterprise Misuse of API keys that you don't own is prohibited and you'll be blocked.                    
+    // https://graphhopper.com/#directions-api Misuse of API keys that you don't own is prohibited and you'll be blocked.                    
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     this.key = "Cmmtvx01R56rdHcQQo7VjI6rgPgxuFLvqI8cR31u";
 
@@ -152,7 +181,7 @@ GHroute.prototype = {
         }
         return (this[to]);
     },
-    delete: function (value) {
+    removeSingle: function (value) {
         var index = false;
         if (!(isNaN(value) || value >= this.length) && this[value] !== undefined) {
             index = value;
@@ -168,13 +197,13 @@ GHroute.prototype = {
         return (this);
     },
     remove: function (from, to) {
-        var to = to || 1;
-        Array.prototype.splice.call(this, from, to);
+        var tmpTo = to || 1;
+        Array.prototype.splice.call(this, from, tmpTo);
         if (this.length === 1)
             Array.prototype.push.call(this, new GHInput());
         this.fire('route.remove', {
             from: from,
-            to: to
+            to: tmpTo
         });
         return (this);
     },
@@ -239,6 +268,7 @@ GHroute.prototype = {
             this._listeners[type] = [];
         }
         this._listeners[type].push(listener);
+        return this;
     },
     fire: function (event, options) {
         if (typeof event === "string") {
@@ -275,20 +305,26 @@ GHroute.prototype = {
     }
 };
 
-// todo
 GHRequest.prototype.init = function (params) {
-    //    for(var key in params) {
-    //        var val = params[key];
-    //        if(val === "false")
-    //            val = false;
-    //        else if(val === "true")
-    //            val = true;
-    //        else {            
-    //            if(parseFloat(val) != NaN)
-    //                val = parseFloat(val)
-    //        }
-    //        this[key] = val;
-    //    } 
+    for (var key in params) {
+        var val = params[key];
+        if (val === "false")
+            val = false;
+        else if (val === "true")
+            val = true;
+
+        // todo
+        // this[key] = val;
+
+        if (key.indexOf('api.') === 0) {
+            key = key.substring(4);
+            if (GHroute.isArray(val))
+                this.api_params[key] = val;
+            else
+                this.api_params[key] = [val];
+        }
+    }
+
     if (params.minPathPrecision)
         this.minPathPrecision = params.minPathPrecision;
     if (params.vehicle)
@@ -299,6 +335,8 @@ GHRequest.prototype.init = function (params) {
         this.algorithm = params.algorithm;
     if (params.locale)
         this.locale = params.locale;
+    if (params.key)
+        this.key = params.key;
 
     if ('do_zoom' in params)
         this.do_zoom = params.do_zoom;
@@ -357,50 +395,42 @@ GHRequest.prototype.hasElevation = function () {
     return this.elevation;
 };
 
-GHRequest.prototype.createGeocodeURL = function (host) {
+GHRequest.prototype.createGeocodeURL = function (host, prevIndex) {
     var tmpHost = this.host;
     if (host)
         tmpHost = host;
-    return this.createPath(tmpHost + "/geocode?limit=8&type=" + this.dataType + "&key=" + this.key + "&locale=" + this.locale);
+
+    var path = this.createPath(tmpHost + "/geocode?limit=6&type=" + this.dataType + "&key=" + this.key);
+    if (prevIndex >= 0 && prevIndex < this.route.size()) {
+        var point = this.route.getIndex(prevIndex);
+        path += "&lat=" + point.lat + "&lon=" + point.lng;
+    }
+    return path;
 };
 
 GHRequest.prototype.createURL = function () {
-    return this.createPath(this.host + "/route?" + this.createParams() + "&type=" + this.dataType + "&key=" + this.key);
+    return this.createPath(this.host + "/route?" + this.createPointParams(false) + "&type=" + this.dataType + "&key=" + this.key);
 };
 
 GHRequest.prototype.createGPXURL = function () {
-    // use points instead of strings
-    var str = "", point, i, l;
-
-    for (i = 0, l = this.route.size(); i < l; i++) {
-        point = this.route.getIndex(i);
-        if (i > 0)
-            str += "&";
-        str += "point=" + encodeURIComponent(point.toString());
-    }
-    return this.createPath(this.host + "/route?" + str + "&type=gpx&key=" + this.key);
+    return this.createPath(this.host + "/route?" + this.createPointParams(false) + "&type=gpx&key=" + this.key);
 };
 
 GHRequest.prototype.createHistoryURL = function () {
-    var str = "?", point, i, l;
-
-    for (i = 0, l = this.route.size(); i < l; i++) {
-        point = this.route.getIndex(i);
-        if (i > 0)
-            str += "&";
-        str += "point=" + encodeURIComponent(point.input);
-    }
-    return this.createPath(str);
+    return this.createPath("?" + this.createPointParams(true));
 };
 
-GHRequest.prototype.createParams = function () {
+GHRequest.prototype.createPointParams = function (useRawInput) {
     var str = "", point, i, l;
 
     for (i = 0, l = this.route.size(); i < l; i++) {
         point = this.route.getIndex(i);
         if (i > 0)
             str += "&";
-        str += "point=" + encodeURIComponent(point.toString());
+        if (useRawInput)
+            str += "point=" + encodeURIComponent(point.input);
+        else
+            str += "point=" + encodeURIComponent(point.toString());
     }
     return (str);
 };
@@ -427,6 +457,15 @@ GHRequest.prototype.createPath = function (url) {
         url += "&elevation=true";
     if (this.debug)
         url += "&debug=true";
+
+    for (var key in this.api_params) {
+        // entries in api_params are all arrays
+        var arr = this.api_params[key];
+        if (GHroute.isArray(arr))
+            for (var keyIndex in arr) {
+                url += "&" + key + "=" + arr[keyIndex];
+            }
+    }
     return url;
 };
 
@@ -507,19 +546,20 @@ GHRequest.prototype.doRequest = function (url, callback) {
             // problematic: this callback is not invoked when using JSONP!
             // http://stackoverflow.com/questions/19035557/jsonp-request-error-handling
             var msg = "API did not respond! ";
-            if (err && err.statusText && err.statusText !== "OK")
-                msg += err.statusText;
+            var json;
 
+            if (err && err.responseText && err.responseText.indexOf('{') >= 0) {
+                json = JSON.parse(err.responseText);
+            } else if (err && err.statusText && err.statusText !== "OK") {
+                msg += err.statusText;
+                var details = "Error for " + url;
+                json = {
+                    message: msg,
+                    hints: [{"message": msg, "details": details}]
+                };
+            }
             log(msg + " " + JSON.stringify(err));
-            var details = "Error for " + url;
-            var json = {
-                "info": {
-                    "errors": [{
-                            "message": msg,
-                            "details": details
-                        }]
-                }
-            };
+
             callback(json);
         },
         type: "GET",

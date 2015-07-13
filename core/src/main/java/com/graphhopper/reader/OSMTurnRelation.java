@@ -7,11 +7,12 @@ import java.util.Map;
 import com.graphhopper.routing.util.TurnCostEncoder;
 import com.graphhopper.util.EdgeExplorer;
 import com.graphhopper.util.EdgeIterator;
+
 import java.util.*;
 
 /**
  * Helper object which gives node cost entries for a given OSM-relation of type "restriction"
- * <p>
+ * <p/>
  * @author Karl Hübner
  */
 public class OSMTurnRelation
@@ -69,26 +70,26 @@ public class OSMTurnRelation
 
     /**
      * Transforms this relation into a collection of turn cost entries
-     * <p>
+     * <p/>
      * @param edgeOutExplorer an edge filter which only allows outgoing edges
      * @param edgeInExplorer an edge filter which only allows incoming edges
      * @return a collection of node cost entries which can be added to the graph later
      */
     public Collection<TurnCostTableEntry> getRestrictionAsEntries( TurnCostEncoder encoder,
-            EdgeExplorer edgeOutExplorer, EdgeExplorer edgeInExplorer, OSMReader osmReader )
+                                                                   EdgeExplorer edgeOutExplorer, EdgeExplorer edgeInExplorer, OSMReader osmReader )
     {
-        int viaNodeId = osmReader.getInternalNodeIdOfOsmNode(this.viaOsmNodeId);
+        int nodeVia = osmReader.getInternalNodeIdOfOsmNode(this.viaOsmNodeId);
 
         try
         {
             // street with restriction was not included (access or tag limits etc)
-            if (viaNodeId == OSMReader.EMPTY)
+            if (nodeVia == OSMReader.EMPTY)
                 return Collections.emptyList();
 
             int edgeIdFrom = EdgeIterator.NO_EDGE;
 
             // get all incoming edges and receive the edge which is defined by fromOsm
-            EdgeIterator iter = edgeInExplorer.setBaseNode(viaNodeId);
+            EdgeIterator iter = edgeInExplorer.setBaseNode(nodeVia);
 
             while (iter.next())
             {
@@ -104,19 +105,18 @@ public class OSMTurnRelation
 
             final Collection<TurnCostTableEntry> entries = new ArrayList<TurnCostTableEntry>();
             // get all outgoing edges of the via node 
-            iter = edgeOutExplorer.setBaseNode(viaNodeId);
+            iter = edgeOutExplorer.setBaseNode(nodeVia);
             // for TYPE_ONLY_* we add ALL restrictions (from, via, * ) EXCEPT the given turn
-            // for TYPE_NO_*   we add ONE restriction  (from, via, to)
+            // for TYPE_NOT_*  we add ONE restriction  (from, via, to)
             while (iter.next())
             {
                 int edgeId = iter.getEdge();
-                long wayId = osmReader.getOsmIdOfInternalEdge(edgeId);                
-                if (edgeId != edgeIdFrom
-                        && (this.restriction == Type.ONLY && wayId != this.toOsmWayId
-                        || (this.restriction == Type.NOT && wayId == this.toOsmWayId && wayId >= 0)))
+                long wayId = osmReader.getOsmIdOfInternalEdge(edgeId);
+                if (edgeId != edgeIdFrom && this.restriction == Type.ONLY && wayId != this.toOsmWayId
+                        || this.restriction == Type.NOT && wayId == this.toOsmWayId && wayId >= 0)
                 {
                     final TurnCostTableEntry entry = new TurnCostTableEntry();
-                    entry.nodeViaNode = viaNodeId;
+                    entry.nodeVia = nodeVia;
                     entry.edgeFrom = edgeIdFrom;
                     entry.edgeTo = iter.getEdge();
                     entry.flags = encoder.getTurnFlags(true, 0);
@@ -145,7 +145,7 @@ public class OSMTurnRelation
     public static class TurnCostTableEntry
     {
         public int edgeFrom;
-        public int nodeViaNode;
+        public int nodeVia;
         public int edgeTo;
         public long flags;
 
@@ -161,7 +161,7 @@ public class OSMTurnRelation
         @Override
         public String toString()
         {
-            return "*-(" + edgeFrom + ")->" + nodeViaNode + "-(" + edgeTo + ")->*";
+            return "*-(" + edgeFrom + ")->" + nodeVia + "-(" + edgeTo + ")->*";
         }
     }
 

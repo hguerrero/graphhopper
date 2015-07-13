@@ -31,7 +31,7 @@ import com.graphhopper.util.shapes.GHPoint3D;
  * |
  * T--S----N
  * </pre>
- * <p>
+ * <p/>
  * @author Peter Karich
  */
 public class QueryResult
@@ -44,6 +44,14 @@ public class QueryResult
     private GHPoint3D snappedPoint;
     private Position snappedPosition;
 
+    /**
+     * Due to precision differences it is hard to define when something is exactly 90° or "on-node"
+     * like TOWER or PILLAR or if it is more "on-edge" (EDGE). The default mechanism is to prefer
+     * "on-edge" even if it could be 90°. To prefer "on-node" you could use e.g. GHPoint.equals with
+     * a default precision of 1e-6.
+     * <p/>
+     * @see DistanceCalc#validEdgeDistance
+     */
     public static enum Position
     {
         EDGE, TOWER, PILLAR
